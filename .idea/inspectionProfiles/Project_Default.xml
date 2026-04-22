@@ -1,0 +1,86 @@
+<component name="InspectionProjectProfileManager">
+  <profile version="1.0">
+    <option name="myName" value="Project Default" />
+    <inspection_tool class="Eslint" enabled="true" level="WARNING" enabled_by_default="true" />
+    <inspection_tool class="PyPackageRequirementsInspection" enabled="true" level="WARNING" enabled_by_default="true">
+      <option name="ignoredPackages">
+        <list>
+          <option value="anyio" />
+          <option value="asttokens" />
+          <option value="async-lru" />
+          <option value="attrs" />
+          <option value="audioop-lts" />
+          <option value="av" />
+          <option value="babel" />
+          <option value="beautifulsoup4" />
+          <option value="bleach" />
+          <option value="certifi" />
+          <option value="charset-normalizer" />
+          <option value="cloup" />
+          <option value="debugpy" />
+          <option value="fastapi" />
+          <option value="glcontext" />
+          <option value="ipykernel" />
+          <option value="ipython" />
+          <option value="isosurfaces" />
+          <option value="json5" />
+          <option value="jsonpointer" />
+          <option value="jsonschema" />
+          <option value="jupyter-lsp" />
+          <option value="jupyter_client" />
+          <option value="jupyter_server_terminals" />
+          <option value="jupyterlab" />
+          <option value="lark" />
+          <option value="manim" />
+          <option value="ManimPango" />
+          <option value="mapbox_earcut" />
+          <option value="matplotlib-inline" />
+          <option value="mistune" />
+          <option value="moderngl" />
+          <option value="moderngl-window" />
+          <option value="nbclient" />
+          <option value="nbconvert" />
+          <option value="networkx" />
+          <option value="notebook" />
+          <option value="numpy" />
+          <option value="packaging" />
+          <option value="pandas" />
+          <option value="parso" />
+          <option value="patsy" />
+          <option value="peewee" />
+          <option value="pillow" />
+          <option value="platformdirs" />
+          <option value="prometheus_client" />
+          <option value="psutil" />
+          <option value="pycairo" />
+          <option value="pycparser" />
+          <option value="pydub" />
+          <option value="pyglet" />
+          <option value="pyglm" />
+          <option value="Pygments" />
+          <option value="python-json-logger" />
+          <option value="pywinpty" />
+          <option value="requests" />
+          <option value="rpds-py" />
+          <option value="screeninfo" />
+          <option value="Send2Trash" />
+          <option value="setuptools" />
+          <option value="skia-pathops" />
+          <option value="sniffio" />
+          <option value="soupsieve" />
+          <option value="srt" />
+          <option value="statsmodels" />
+          <option value="svgelements" />
+          <option value="tornado" />
+          <option value="tqdm" />
+          <option value="tzdata" />
+          <option value="urllib3" />
+          <option value="watchdog" />
+          <option value="wcwidth" />
+          <option value="webcolors" />
+        </list>
+      </option>
+    </inspection_tool>
+    <inspection_tool class="SqlNoDataSourceInspection" enabled="false" level="WARNING" enabled_by_default="false" />
+  </profile>
+</component>
