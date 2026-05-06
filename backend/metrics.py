@@ -44,6 +44,7 @@ def profit_margin(ticker):
     finans = ticker.financials
     net_income = finans.loc[[i for i in finans.index if "net income" in i.lower()][0]]
     revenue = finans.loc[[i for i in finans.index if "revenue" in i.lower()][0]]
+    revenue = revenue.replace(0, float('nan'))
     profit = (net_income / revenue)*100
     return profit
 
@@ -60,12 +61,14 @@ def ROE(ticker):                 #Return over equity
     balance = ticker.balance_sheet          #Equity = ₹100, Profit = ₹20, ROE = 20%
     net_income = finans.loc[[i for i in finans.index if "net income" in i.lower()][0]]
     equity = balance.loc[[i for i in balance.index if "equity" in i.lower()][0]]
+    equity = equity.replace(0, float('nan'))
     roe = (net_income / equity) * 100
     return roe
 
 def Gross_margin(ticker):           #profit after production cost
     finans = ticker.financials          #((revenue - gogs)/ revenue) *100
     revenue = finans.loc[[i for i in finans.index if "revenue" in i.lower()][0]]
+    revenue = revenue.replace(0, float('nan'))
     COGS = finans.loc[[i for i in finans.index if "cost of revenue" in i.lower()][0]]
     gross = ((revenue - COGS) / revenue) * 100
     return gross
@@ -99,6 +102,7 @@ def debt_to_equity(ticker):        #How much company depends on borrowing
     balance = ticker.balance_sheet
     debt = balance.loc[[i for i in balance.index if "debt" in i.lower()][0]]
     equity = balance.loc[[i for i in balance.index if "equity" in i.lower()][0]]
+    equity = equity.replace(0, float('nan'))
     return (debt / equity)
 
 
@@ -107,6 +111,7 @@ def asset_turnover(ticker):        #How efficiently assets generate sales, are a
     balance = ticker.balance_sheet
     revenue = finans.loc[[i for i in finans.index if "revenue" in i.lower()][0]]
     assets = balance.loc[[i for i in balance.index if "asset" in i.lower()][0]]
+    assets = assets.replace(0, float('nan'))
     return (revenue / assets)
 
 
@@ -122,6 +127,7 @@ def pb_ratio(ticker, df):         #price to book ratio
     balance = ticker.balance_sheet         #price vs company net worth
     equity = balance.loc[[i for i in balance.index if "equity" in i.lower()][0]]
     shares = ticker.info['sharesOutstanding']
+    shares = shares.replace(0, float('nan'))
     book_value_ps = equity / shares
     price = df['Close'].iloc[-1]
     pb = (price / book_value_ps)
@@ -131,6 +137,7 @@ def pb_ratio(ticker, df):         #price to book ratio
 def ps_ratio(ticker, df):           #price vs sales ratio
     finans = ticker.financials
     revenue = finans.loc[[i for i in finans.index if "revenue" in i.lower()][0]]
+    revenue = revenue.replace(0, float('nan'))
     shares = ticker.info['sharesOutstanding']
     price = df['Close'].iloc[-1]
     market_cap = price * shares
