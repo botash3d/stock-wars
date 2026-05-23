@@ -26,9 +26,10 @@ def beta(daily_return, market_return):       #how much a stock is affected by ma
     return beta_value         #cov() → covariance how two things move together
                            # var() → variance how much market moves by itself
 
-def rolling_returns(df):           #return over x days
-    roll_20 = df['Close'].pct_change(20) * 100
-    roll_252 = df['Close'].pct_change(252)*100
+def rolling_returns(df):
+    close = df["Close"].squeeze()  # fix MultiIndex
+    roll_20 = close.pct_change(20) * 100
+    roll_252 = close.pct_change(252) * 100
     return {
         'roll_20': roll_20,
         'roll_252': roll_252
@@ -65,12 +66,12 @@ def ROE(ticker):                 #Return over equity
     roe = (net_income / equity) * 100
     return roe
 
-def Gross_margin(ticker):           #profit after production cost
-    finans = ticker.financials          #((revenue - gogs)/ revenue) *100
-    revenue = finans.loc[[i for i in finans.index if "revenue" in i.lower()][0]]
+def Gross_margin(ticker):
+    finans = ticker.financials
+    revenue = finans.loc["Total Revenue"]
+    gross_profit = finans.loc["Gross Profit"]
     revenue = revenue.replace(0, float('nan'))
-    COGS = finans.loc[[i for i in finans.index if "cost of revenue" in i.lower()][0]]
-    gross = ((revenue - COGS) / revenue) * 100
+    gross = (gross_profit / revenue) * 100
     return gross
 
 def earnings_growth(ticker):
@@ -116,30 +117,30 @@ def asset_turnover(ticker):        #How efficiently assets generate sales, are a
 
 
 def dividend_yield(df, ticker):           #WHAT??????????????
-    price = df['Close'].iloc[-1]        #dividend is None → company doesn’t pay dividend
+    price = df['Close'].squeeze().iloc[-1]        #dividend is None → company doesn’t pay dividend
     dividend = ticker.info.get('dividendRate')      # price == 0 → avoid division error
     if dividend is None or price == 0:
         return None
     return (dividend / price) * 100
 
 
-def pb_ratio(ticker, df):         #price to book ratio
-    balance = ticker.balance_sheet         #price vs company net worth
+def pb_ratio(ticker, df):
+    balance = ticker.balance_sheet
     equity = balance.loc[[i for i in balance.index if "equity" in i.lower()][0]]
     shares = ticker.info['sharesOutstanding']
-    shares = shares.replace(0, float('nan'))
+    if not shares or shares == 0:
+        return None
     book_value_ps = equity / shares
-    price = df['Close'].iloc[-1]
+    price = df['Close'].squeeze().iloc[-1]
     pb = (price / book_value_ps)
     return pb
 
-
-def ps_ratio(ticker, df):           #price vs sales ratio
+def ps_ratio(ticker, df):
     finans = ticker.financials
     revenue = finans.loc[[i for i in finans.index if "revenue" in i.lower()][0]]
     revenue = revenue.replace(0, float('nan'))
     shares = ticker.info['sharesOutstanding']
-    price = df['Close'].iloc[-1]
+    price = df['Close'].squeeze().iloc[-1]
     market_cap = price * shares
     ps = market_cap / revenue
     return ps
