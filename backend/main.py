@@ -3,8 +3,16 @@ import yfinance as yf
 from data_loader import load_data
 from data_preprocessing import get_close
 from metrics import *
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/")
 def root():
