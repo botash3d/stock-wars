@@ -38,8 +38,9 @@ def rolling_returns(df):
 def revenue_growth(ticker):
     finans = ticker.financials
     revenue = finans.loc[[i for i in finans.index if "revenue" in i.lower()][0]]
+    revenue = revenue.sort_index()
     growth = revenue.pct_change() * 100
-    return growth
+    return growth.sort_index(ascending=False)
 
 def profit_margin(ticker):
     finans = ticker.financials
@@ -50,7 +51,7 @@ def profit_margin(ticker):
     return profit
 
 def PE_Share(ticker, df):   #price per share/ earning per share
-    price_per_stock = df['Close'].iloc[-1]
+    price_per_stock = df['Close'].squeeze().iloc[-1]
     earning_per_stock = ticker.info['trailingEps']
     if earning_per_stock is None or earning_per_stock == 0:
         return None
@@ -77,7 +78,9 @@ def Gross_margin(ticker):
 def earnings_growth(ticker):
     finans = ticker.financials
     net_income = finans.loc[[i for i in finans.index if "net income" in i.lower()][0]]
-    return net_income.pct_change() * 100
+    net_income = net_income.sort_index()
+    growth = net_income.pct_change() * 100
+    return growth.sort_index(ascending=False)
 
 
 def operating_cash_flow(ticker):     #cash gen after business
@@ -96,8 +99,9 @@ def free_cash_flow_growth(ticker):
     cashflow = ticker.cashflow
     operating_cf = cashflow.loc[[i for i in cashflow.index if "operating" in i.lower()][0]]
     cap_ex = cashflow.loc[[i for i in cashflow.index if "capital ex" in i.lower()][0]]
-    cf = operating_cf - cap_ex
-    return cf.pct_change()*100
+    cf = (operating_cf - cap_ex).sort_index()
+    growth = cf.pct_change() * 100
+    return growth.sort_index(ascending=False)
 
 def debt_to_equity(ticker):        #How much company depends on borrowing
     balance = ticker.balance_sheet

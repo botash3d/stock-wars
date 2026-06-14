@@ -4,6 +4,7 @@ from data_loader import load_data
 from data_preprocessing import get_close
 from metrics import *
 from fastapi.middleware.cors import CORSMiddleware
+import pandas as pd
 
 app = FastAPI()
 
@@ -17,6 +18,65 @@ app.add_middleware(
 @app.get("/")
 def root():
     return {"Hello": "World"}
+
+RANGE_CONFIG = {
+    "1D":  {"period": "1d",  "interval": "5m"},
+    "5D":  {"period": "5d",  "interval": "15m"},
+    "1M":  {"period": "1mo", "interval": "1d"},
+    "6M":  {"period": "6mo", "interval": "1d"},
+    "YTD": {"period": "ytd", "interval": "1d"},
+    "1Y":  {"period": "1y",  "interval": "1d"},
+    "5Y":  {"period": "5y",  "interval": "1wk"},
+    "MAX": {"period": "max", "interval": "1mo"},
+}
+INTRADAY = {"1m", "5m", "15m", "30m", "1h"}
+
+@app.get("/price-history")
+def price_history(ticker: str, rng: str = "1Y"):
+    rng = rng.upper()
+    if rng not in RANGE_CONFIG:
+        raise HTTPException(status_code=400, detail=f"Invalid range. Choose from {list(RANGE_CONFIG)}")
+
+    cfg = RANGE_CONFIG[rng]
+    df = load_data(ticker, period=cfg["period"], interval=cfg["interval"])
+    close = df['Close'].squeeze()
+
+    fmt = "%y-%m-%d %H:%M" if cfg["interval"] in INTRADAY else "%y-%m-%d"
+    dates = close.index.strftime(fmt).to_list()
+    prices = close.round(2).to_list()
+    return {'dates': dates, 'price': prices}
+
+@app.get("/compare")
+def compare(ticker1: str, ticker2: str, rng: str = "1Y"):
+    rng = rng.upper()
+    if rng not in RANGE_CONFIG:
+        raise HTTPException(status_code=400, detail=f"Invalid range. Choose from {list(RANGE_CONFIG)}")
+
+    cfg = RANGE_CONFIG[rng]
+    df1 = load_data(ticker1, period=cfg["period"], interval=cfg["interval"])
+    df2 = load_data(ticker2, period=cfg["period"], interval=cfg["interval"])
+
+    close1 = df1['Close'].squeeze()
+    close2 = df2['Close'].squeeze()
+
+    t1, t2 = ticker1.upper(), ticker2.upper()
+
+    combined = pd.concat([close1, close2], axis=1, join='inner')
+    combined.columns = [t1, t2]
+
+    if combined.empty:
+        raise HTTPException(status_code=404, detail="No overlapping data between the two tickers")
+
+    normalized = (combined / combined.iloc[0] - 1) * 100
+
+    fmt = "%y-%m-%d %H:%M" if cfg["interval"] in INTRADAY else "%y-%m-%d"
+    dates = combined.index.strftime(fmt).to_list()
+
+    return {
+        "dates": dates,
+        t1: normalized[t1].round(2).tolist(),
+        t2: normalized[t2].round(2).tolist(),
+    }
 
 @app.get("/daily-returns")
 def get_daily_returns(ticker: str):
