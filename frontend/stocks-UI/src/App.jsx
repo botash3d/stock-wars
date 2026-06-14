@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
 import { LineChart, Line,BarChart,Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,Legend } from "recharts";
-const API = VITE_API_URL = https://stock-wars-backend.onrender.com
+const API = VITE_API_URL = https://stock-wars-backend.onrender.com;
 
 
 const RANGES = ["1D", "5D", "1M", "6M", "YTD", "1Y", "5Y", "MAX"];
