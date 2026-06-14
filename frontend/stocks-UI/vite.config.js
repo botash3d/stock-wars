@@ -5,6 +5,8 @@ import tailwindcss from '@tailwindcss/vite'
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
+    host: true,
+    allowedHosts: ['stock-wars-frontend.onrender.com'],
     hmr: {
       protocol: 'ws',
       host: 'localhost',
