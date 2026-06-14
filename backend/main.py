@@ -5,6 +5,30 @@ from data_preprocessing import get_close
 from metrics import *
 from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
+import time
+from functools import wraps
+from predictor import train_and_predict
+
+# ----- Simple TTL cache -----
+_cache: dict = {}
+TTL = 600  # seconds (10 min)
+
+def cached(key_fn):
+    """Decorator that caches the return value of a route function by a dynamic key."""
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwargs):
+            key = key_fn(**kwargs)
+            now = time.time()
+            if key in _cache:
+                value, ts = _cache[key]
+                if now - ts < TTL:
+                    return value
+            result = fn(*args, **kwargs)
+            _cache[key] = (result, now)
+            return result
+        return wrapper
+    return decorator
 
 app = FastAPI()
 
@@ -32,6 +56,7 @@ RANGE_CONFIG = {
 INTRADAY = {"1m", "5m", "15m", "30m", "1h"}
 
 @app.get("/price-history")
+@cached(key_fn=lambda ticker, rng="1Y": f"price-history:{ticker.upper()}:{rng.upper()}")
 def price_history(ticker: str, rng: str = "1Y"):
     rng = rng.upper()
     if rng not in RANGE_CONFIG:
@@ -40,13 +65,17 @@ def price_history(ticker: str, rng: str = "1Y"):
     cfg = RANGE_CONFIG[rng]
     df = load_data(ticker, period=cfg["period"], interval=cfg["interval"])
     close = df['Close'].squeeze()
+    volume = df['Volume'].squeeze()
 
     fmt = "%y-%m-%d %H:%M" if cfg["interval"] in INTRADAY else "%y-%m-%d"
     dates = close.index.strftime(fmt).to_list()
     prices = close.round(2).to_list()
-    return {'dates': dates, 'price': prices}
+    volumes = volume.astype(int).to_list()
+
+    return {'dates': dates, 'price': prices, 'volume': volumes}
 
 @app.get("/compare")
+@cached(key_fn=lambda ticker1, ticker2, rng="1Y": f"compare:{ticker1.upper()}:{ticker2.upper()}:{rng.upper()}")
 def compare(ticker1: str, ticker2: str, rng: str = "1Y"):
     rng = rng.upper()
     if rng not in RANGE_CONFIG:
@@ -58,11 +87,16 @@ def compare(ticker1: str, ticker2: str, rng: str = "1Y"):
 
     close1 = df1['Close'].squeeze()
     close2 = df2['Close'].squeeze()
+    volume1 = df1['Volume'].squeeze()
+    volume2 = df2['Volume'].squeeze()
 
     t1, t2 = ticker1.upper(), ticker2.upper()
 
     combined = pd.concat([close1, close2], axis=1, join='inner')
     combined.columns = [t1, t2]
+
+    vol_combined = pd.concat([volume1, volume2], axis=1, join='inner')
+    vol_combined.columns = [f"{t1}_vol", f"{t2}_vol"]
 
     if combined.empty:
         raise HTTPException(status_code=404, detail="No overlapping data between the two tickers")
@@ -76,7 +110,44 @@ def compare(ticker1: str, ticker2: str, rng: str = "1Y"):
         "dates": dates,
         t1: normalized[t1].round(2).tolist(),
         t2: normalized[t2].round(2).tolist(),
+        f"{t1}_vol": vol_combined[f"{t1}_vol"].astype(int).tolist(),
+        f"{t2}_vol": vol_combined[f"{t2}_vol"].astype(int).tolist(),
     }
+
+@app.get("/company-info")
+@cached(key_fn=lambda ticker: f"company-info:{ticker.upper()}")
+def get_company_info(ticker: str):
+    try:
+        t = yf.Ticker(ticker)
+        info = t.info
+
+        if not info or len(info) <= 1:
+            raise HTTPException(status_code=404, detail="No info available for this ticker")
+
+        name = info.get("longName") or info.get("shortName") or ticker.upper()
+        sector = info.get("sector") or info.get("industryDisp") or "N/A"
+        market_cap = info.get("marketCap")
+        price = info.get("currentPrice") or info.get("regularMarketPrice")
+        currency = info.get("currency", "USD")
+
+        def fmt_market_cap(mc):
+            if mc is None: return "N/A"
+            if mc >= 1e12: return f"${mc / 1e12:.2f}T"
+            if mc >= 1e9:  return f"${mc / 1e9:.2f}B"
+            if mc >= 1e6:  return f"${mc / 1e6:.2f}M"
+            return f"${mc:,.0f}"
+
+        return {
+            "name": name,
+            "sector": sector,
+            "market_cap": fmt_market_cap(market_cap),
+            "price": round(price, 2) if price else None,
+            "currency": currency,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/daily-returns")
 def get_daily_returns(ticker: str):
@@ -229,54 +300,79 @@ def get_ps_ratio(ticker: str):
     result = ps_ratio(t, df)
     return {"ps_ratio": result.dropna().round(4).tolist()}
 
+@app.get("/cache/clear")
+def clear_cache():
+    _cache.clear()
+    return {"cleared": True}
+
+@app.get("/predict")
+@cached(key_fn=lambda ticker: f"predict:{ticker.upper()}")
+def predict(ticker: str):
+    try:
+        df = load_data(ticker, period="5y")
+        spy_df = load_data("SPY", period="5y")
+        close = df["Close"].squeeze()
+        spy_close = spy_df["Close"].squeeze()
+
+        stock_pct, spy_pct, relative_pct, predicted_prices = train_and_predict(
+            close, benchmark_series=spy_close, days=30
+        )
+
+        return {
+            "ticker": ticker.upper(),
+            "absolute_pct": stock_pct,
+            "spy_pct": spy_pct,
+            "relative_pct": relative_pct,
+            "direction": "outperform" if relative_pct > 0 else "underperform",
+            "direction_absolute": "up" if stock_pct > 0 else "down",
+            "predicted_prices": predicted_prices
+        }
+    except ValueError:
+        raise HTTPException(status_code=404, detail=f"Ticker {ticker} not found.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/all-metrics")
+@cached(key_fn=lambda ticker: f"all-metrics:{ticker.upper()}")
 def get_all_metrics(ticker: str):
     df = load_data(ticker, period="5y")
     close = df["Close"].squeeze()
     t = yf.Ticker(ticker)
     d_returns = daily_returns(close)
 
+    def safe(fn, *args, **kwargs):
+        try:
+            return fn(*args, **kwargs)
+        except Exception:
+            return None
+
     result = {}
-
-    # Price metrics
-    # result["daily_returns"] = d_returns.dropna().round(4).tolist()
-    # result["total_returns"] = total_returns(d_returns).dropna().round(4).tolist()
-    # result["rolling_returns"] = {
-    #     "roll_20": rolling_returns(df)["roll_20"].dropna().round(4).tolist(),
-    #     "roll_252": rolling_returns(df)["roll_252"].dropna().round(4).tolist()
-    # }
-
-    # Risk metrics
 
     result["annual_volatility"] = round(annual_volatility(d_returns), 4)
     result["sharpe_ratio"] = round(sharpe_ratio(d_returns, 0.05), 4)
     result["value_at_risk"] = round(value_at_risk(d_returns), 4)
 
-    # Valuation
-    pe = PE_Share(t, df)
+    pe = safe(PE_Share, t, df)
     result["pe_ratio"] = round(pe, 4) if pe is not None else None
-    pb = pb_ratio(t, df)
-    result["pb_ratio"] = pb.dropna().round(4).tolist() if pb is not None else None
-    div = dividend_yield(df, t)
+
+    div = safe(dividend_yield, df, t)
     result["dividend_yield"] = round(div, 4) if div is not None else None
-    ps = ps_ratio(t, df)
-    result["ps_ratio"] = ps.dropna().round(4).tolist()
 
-    # Fundamentals
-    result["revenue_growth"] = revenue_growth(t).dropna().round(4).tolist()
-    result["profit_margin"] = profit_margin(t).dropna().round(4).tolist()
-    result["gross_margin"] = Gross_margin(t).dropna().round(4).tolist()
-    result["earnings_growth"] = earnings_growth(t).dropna().round(4).tolist()
-    result["roe"] = ROE(t).dropna().round(4).tolist()
+    pb = safe(pb_ratio, t, df)
+    result["pb_ratio"] = pb.dropna().round(4).tolist() if pb is not None else None
 
-    # Cash flow
-    result["operating_cash_flow"] = operating_cash_flow(t).dropna().round(4).tolist()
-    result["free_cash_flow"] = free_cash_flow(t).dropna().round(4).tolist()
-    result["free_cash_flow_growth"] = free_cash_flow_growth(t).dropna().round(4).tolist()
+    ps = safe(ps_ratio, t, df)
+    result["ps_ratio"] = ps.dropna().round(4).tolist() if ps is not None else None
 
-    # Leverage & efficiency
-    result["debt_to_equity"] = debt_to_equity(t).dropna().round(4).tolist()
-    result["asset_turnover"] = asset_turnover(t).dropna().round(4).tolist()
+    result["revenue_growth"]       = safe(lambda: revenue_growth(t).dropna().round(4).tolist())
+    result["profit_margin"]        = safe(lambda: profit_margin(t).dropna().round(4).tolist())
+    result["gross_margin"]         = safe(lambda: Gross_margin(t).dropna().round(4).tolist())
+    result["earnings_growth"]      = safe(lambda: earnings_growth(t).dropna().round(4).tolist())
+    result["roe"]                  = safe(lambda: ROE(t).dropna().round(4).tolist())
+    result["operating_cash_flow"]  = safe(lambda: operating_cash_flow(t).dropna().round(4).tolist())
+    result["free_cash_flow"]       = safe(lambda: free_cash_flow(t).dropna().round(4).tolist())
+    result["free_cash_flow_growth"]= safe(lambda: free_cash_flow_growth(t).dropna().round(4).tolist())
+    result["debt_to_equity"]       = safe(lambda: debt_to_equity(t).dropna().round(4).tolist())
+    result["asset_turnover"]       = safe(lambda: asset_turnover(t).dropna().round(4).tolist())
 
     return result

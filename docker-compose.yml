@@ -1,0 +1,16 @@
+services:
+  backend:
+    build: ./backend
+    container_name: stockiq-backend
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build: ./frontend/stocks-UI
+    container_name: stockiq-frontend
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    depends_on:
+      - backend

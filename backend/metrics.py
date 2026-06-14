@@ -105,7 +105,10 @@ def free_cash_flow_growth(ticker):
 
 def debt_to_equity(ticker):        #How much company depends on borrowing
     balance = ticker.balance_sheet
-    debt = balance.loc[[i for i in balance.index if "debt" in i.lower()][0]]
+    candidates = [i for i in balance.index if "total debt" in i.lower()]
+    if not candidates:
+        candidates = [i for i in balance.index if "debt" in i.lower()]
+    debt = balance.loc[candidates[0]]
     equity = balance.loc[[i for i in balance.index if "equity" in i.lower()][0]]
     equity = equity.replace(0, float('nan'))
     return (debt / equity)
